@@ -1,31 +1,22 @@
 /*
-  WiFi Web Server LED Blink
-
- A simple web server that lets you blink an LED via the web.
- This sketch will print the IP address of your WiFi Shield (once connected)
- to the Serial monitor. From there, you can open that address in a web browser
- to turn on and off the LED on pin 5.
-
- If the IP address of your shield is yourAddress:
- http://yourAddress/H turns the LED on
- http://yourAddress/L turns it off
-
- This example is written for a network using WPA encryption. For
- WEP or WPA, change the Wifi.begin() call accordingly.
-
- Circuit:
- * WiFi shield attached
- * LED attached to pin 5
-
- created for arduino 25 Nov 2012
- by Tom Igoe
-
-ported for sparkfun esp32 
-31.01.2017 by Jan Hendrik Berlin
- 
+ * Code adapted from the following examples:
+ * WiFiServer
+ * BMETest
+ * 
+ * If you wish to run this, you must have the following installed
+ * Arduino Core for ESP32 (alt 8266)
+ * Adafruit BME280 library
+ * Adafruit Sensor library
+ * 
+ * If you wish to use another sensor,
+ * simply change the librares and update startBme and printBmeStats accordingly
+ * 
  */
 
+//for WiFi and sensor functionality
 #include <WiFi.h>
+
+//for BME280 sensor
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
@@ -33,13 +24,19 @@ ported for sparkfun esp32
 #define BME_MISO 18
 #define BME_MOSI 5
 #define BME_CS 17
-
 #define SEALEVELPRESSURE_HPA (1013.25)
 
-
+//name of the access point which will be created
 #define AP_SSID "IoT_Demo"
 
+/* use this if you want to connect to an existing network */
+#define ssid "********"
+#define password "********"
+
+//the server which actually sends the website
 WiFiServer server(80);
+
+//definitions for bme280
 Adafruit_BME280 bme(BME_CS, BME_MOSI, BME_MISO, BME_SCK); // software SPI
 boolean bmeStarted = false;
 String mainBmeLoc = "LT7";
@@ -50,11 +47,17 @@ void startWiFiAndServer(){
     Serial.println();
     Serial.print("Starting AP ");
     Serial.println(AP_SSID);
+
+    //create access point
     WiFi.mode(WIFI_MODE_AP);
     WiFi.softAP(AP_SSID);
+    WiFi.begin();
 
+
+    //connect to existing network
+//    WiFi.mode(WIFI_MODE_STA);
 //    WiFi.begin(ssid, password);
-  WiFi.begin();
+    
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         Serial.print(".");
@@ -63,25 +66,22 @@ void startWiFiAndServer(){
     Serial.println("");
     Serial.println("WiFi connected");
     Serial.println("IP address: ");
+    //IP when connected to network
+    //Serial.println(WiFi.localIP);
+
+    //IP when access point
     Serial.println(WiFi.softAPIP());
     
     server.begin();
   
 }
 
-void startBme()
-{
-  bmeStarted = bme.begin();
-    
-}
 
 void setup()
 {
     Serial.begin(115200);
     pinMode(5, OUTPUT);      // set the LED pin mode
     
-   
-
     delay(10);
     startWiFiAndServer();
     // We start by connecting to a WiFi network
@@ -89,7 +89,11 @@ void setup()
 
 }
 
-int value = 0;
+
+void startBme()
+{
+  bmeStarted = bme.begin();    
+}
 
 String printBmeStats()
 {
@@ -158,10 +162,10 @@ void loop(){
             // the content of the HTTP response follows the header:
             client.print("Click <a href=\"/H\">here</a> turn the LED on pin 5 on<br>");
             client.print("Click <a href=\"/L\">here</a> turn the LED on pin 5 off<br>");
+            
+            client.print(printBmeStats());  //Print the data from the sensor
 
-            client.print(printBmeStats());
-
-            client.print(printAdvertising());
+            client.print(printAdvertising()); //Print advertising
           
             // The HTTP response ends with another blank line:
             client.println();
