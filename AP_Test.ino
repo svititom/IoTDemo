@@ -99,7 +99,7 @@ String printBmeStats()
  if (!bmeStarted){
     return "No temperature sensor found!";
   } 
-  
+  //build the enviromental data string
   String stats = "<br><br>Location: ";
   stats += mainBmeLoc;
   stats += "<br>";
@@ -120,6 +120,13 @@ String printBmeStats()
   stats += bme.readAltitude(SEALEVELPRESSURE_HPA);
   stats += " m<br>";
   return stats;
+}
+
+String printAdvertising()
+{
+  String advert = "<br><br>Source Code can be found at: <a href=\"https://github.com/svititom/IoTDemo\">Github</a><br>";
+  advert +=  "More info can be found at: <a href=\"http://distributedweather.mzf.cz/post/show?postId=11\">Distributed Weather</a>";
+  return advert;
 }
 
 void loop(){
@@ -154,6 +161,7 @@ void loop(){
 
             client.print(printBmeStats());
 
+            client.print(printAdvertising());
           
             // The HTTP response ends with another blank line:
             client.println();
