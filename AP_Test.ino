@@ -1,17 +1,18 @@
 /*
- * Code adapted from the following examples:
- * WiFiServer
- * BMETest
- * 
- * If you wish to run this, you must have the following installed
- * Arduino Core for ESP32 (alt 8266)
- * Adafruit BME280 library
- * Adafruit Sensor library
- * 
- * If you wish to use another sensor,
- * simply change the librares and update startBme and printBmeStats accordingly
- * 
- */
+   Code adapted from the following examples:
+   WiFiServer
+   BMETest
+
+   If you wish to run this, you must have the following installed
+   Arduino Core for ESP32 (alt 8266)
+   Adafruit BME280 library
+   Adafruit Sensor library
+   LEDCSoftwareFade
+
+   If you wish to use another sensor,
+   simply change the librares and update startBme and printBmeStats accordingly
+
+*/
 
 //for WiFi and sensor functionality
 #include <WiFi.h>
@@ -20,10 +21,10 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
-#define BME_SCK 19
-#define BME_MISO 18
-#define BME_MOSI 5
-#define BME_CS 17
+#define BME_SCK 17
+#define BME_MISO 5
+#define BME_MOSI 18
+#define BME_CS 19
 #define SEALEVELPRESSURE_HPA (1013.25)
 
 //name of the access point which will be created
@@ -32,6 +33,18 @@
 /* use this if you want to connect to an existing network */
 #define ssid "********"
 #define password "********"
+
+//If you want to add more LEDs, don't forget to add the timer channels in startLedTimer
+#define LEDOne 23
+#define LEDTwo 22
+//LEDs are dimmed with their timer channels and not the actual pins
+#define LEDOneChan 0
+#define LEDTwoChan 1
+
+//the duty cycle is how long the pwm signal is up, its 8bit, thus 90 => 90/255 = ~35%
+#define Duty 90
+#define LEDC_BASE_FREQ 5000
+
 
 //the server which actually sends the website
 WiFiServer server(80);
@@ -42,67 +55,91 @@ boolean bmeStarted = false;
 String mainBmeLoc = "LT7";
 
 
-void startWiFiAndServer(){
-    Serial.println();
-    Serial.println();
-    Serial.print("Starting AP ");
-    Serial.println(AP_SSID);
+void startWiFiAndServer() {
+  Serial.println();
+  Serial.println();
+  Serial.print("Starting AP ");
+  Serial.println(AP_SSID);
 
-    //create access point
-    WiFi.mode(WIFI_MODE_AP);
-    WiFi.softAP(AP_SSID);
-    WiFi.begin();
+  //create access point
+  WiFi.mode(WIFI_MODE_AP);
+  WiFi.softAP(AP_SSID);
+  WiFi.begin();
 
 
-    //connect to existing network
-//    WiFi.mode(WIFI_MODE_STA);
-//    WiFi.begin(ssid, password);
-    
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-    }
+  //connect to existing network
+  //    WiFi.mode(WIFI_MODE_STA);
+  //    WiFi.begin(ssid, password);
 
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    //IP when connected to network
-    //Serial.println(WiFi.localIP);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
 
-    //IP when access point
-    Serial.println(WiFi.softAPIP());
-    
-    server.begin();
-  
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  //IP when connected to network
+  //Serial.println(WiFi.localIP);
+
+  //IP when access point
+  Serial.println(WiFi.softAPIP());
+
+  server.begin();
+
 }
 
 
 void setup()
 {
-    Serial.begin(115200);
-    pinMode(5, OUTPUT);      // set the LED pin mode
-    
-    delay(10);
-    startWiFiAndServer();
-    // We start by connecting to a WiFi network
+  Serial.begin(115200);
+  pinMode(5, OUTPUT);      // set the LED pin mode
+
+  delay(10);
+  startWiFiAndServer();
+  //currently analogWrite is not implemented, so we use PWM via a timer instead (See LEDCSoftwareFade)
+  //I didn't have a resistor on hand so use this instead
+  startLedTimer();
+
+  // We start by connecting to a WiFi network
 
 
 }
 
+void startLedTimer()
+{
+  int channelOne = 0; //channel of the timer
+  int channelTwo = 1;
+  int timerPrecision = 13; //bits
+  ledcSetup(LEDOneChan, LEDC_BASE_FREQ, timerPrecision);
+  ledcAttachPin(LEDOne, LEDOneChan);
+  ledcSetup(LEDTwoChan, LEDC_BASE_FREQ, timerPrecision);
+  ledcAttachPin(LEDTwo, LEDTwoChan);
+}
+// Arduino like analogWrite
+// value has to be between 0 and valueMax
+void ledcAnalogWrite(uint8_t channel, uint32_t value, uint32_t valueMax = 120) {
+  // calculate duty
+  //min not recognized for some reason, forums suggested just use _min
+  uint32_t duty = (LEDC_BASE_FREQ / valueMax) * _min(value, valueMax);
+
+  // write duty to LEDC
+  ledcWrite(channel, duty);
+}
 
 void startBme()
 {
-  bmeStarted = bme.begin();    
+  bmeStarted = bme.begin();
 }
 
 String printBmeStats()
 {
- if (!bmeStarted){
-      startBme(); //startBme toggles bmeStrated, so if it isn't started with this, bmeStarted stays false
- }  //make sure it was started
- if (!bmeStarted){
+  if (!bmeStarted) {
+    startBme(); //startBme toggles bmeStrated, so if it isn't started with this, bmeStarted stays false
+  }  //make sure it was started
+  if (!bmeStarted) {
     return "No temperature sensor found!";
-  } 
+  }
   //build the enviromental data string
   String stats = "<br><br>Location: ";
   stats += mainBmeLoc;
@@ -133,18 +170,18 @@ String printAdvertising()
   return advert;
 }
 
-void loop(){
- WiFiClient client = server.available();   // listen for incoming clients
+void loop() {
+  WiFiClient client = server.available();   // listen for incoming clients
 
   if (client) {                             // if you get a client,
 
-   
-    
+
+
     Serial.println("new client");           // print a message out the serial port
-    
+
     String currentLine = "";                // make a String to hold incoming data from the client
     while (client.connected()) {            // loop while the client's connected
-      
+
       if (client.available()) {             // if there's bytes to read from the client,
         char c = client.read();             // read a byte, then
         Serial.write(c);                    // print it out the serial monitor
@@ -160,13 +197,13 @@ void loop(){
             client.println();
 
             // the content of the HTTP response follows the header:
-            client.print("Click <a href=\"/H\">here</a> turn the LED on pin 5 on<br>");
-            client.print("Click <a href=\"/L\">here</a> turn the LED on pin 5 off<br>");
-            
+            client.print("Turn Red LED  <a href=\"/23/H\">on</a> or <a href=\"/23/L\">off</a>?<br>");
+            client.print("Turn Blue LED <a href=\"/22/H\">on</a> or <a href=\"/22/L`\">off</a>?<br>");
+
             client.print(printBmeStats());  //Print the data from the sensor
 
             client.print(printAdvertising()); //Print advertising
-          
+
             // The HTTP response ends with another blank line:
             client.println();
             // break out of the while loop:
@@ -179,11 +216,22 @@ void loop(){
         }
 
         // Check to see if the client request was "GET /H" or "GET /L":
-        if (currentLine.endsWith("GET /H")) {
-          digitalWrite(5, HIGH);               // GET /H turns the LED on
+        //TODO Find a better way to route the requests ...
+        if (currentLine.endsWith("GET /23/H")) {
+          ledcAnalogWrite(LEDOneChan, 90);
+          Serial.println("Turning LED On");
+          //          digitalWrite(5, HIGH);               // GET /H turns the LED on
         }
-        if (currentLine.endsWith("GET /L")) {
-          digitalWrite(5, LOW);                // GET /L turns the LED off
+        if (currentLine.endsWith("GET /23/L")) {
+          ledcAnalogWrite(LEDOneChan, 0);
+          Serial.println("Turning led off");
+          //          digitalWrite(5, LOW);               // GET /H turns the LED on
+        }
+        if (currentLine.endsWith("GET /22/H")) {
+          ledcAnalogWrite(LEDTwoChan, 90);
+        }
+        if (currentLine.endsWith("GET /22/L")) {
+          ledcAnalogWrite(LEDTwoChan, 0);
         }
       }
     }
@@ -192,3 +240,5 @@ void loop(){
     Serial.println("client disonnected");
   }
 }
+
+
